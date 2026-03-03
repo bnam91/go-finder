@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; img-src 'self' https: http:; style-src 'self'">
+  <title>Dev YouTube - gotrap_keywords</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="settings">
+    <div class="settings-row settings-row-inline">
+      <span class="settings-item">
+        <label class="settings-label">채널</label>
+        <select id="channelSelect"><option value="">-- 선택 --</option></select>
+        <button type="button" class="btn" id="btnAddChannel">추가</button>
+      </span>
+      <span class="settings-item">
+        <label class="settings-label">저장</label>
+        <select id="outputSelect">
+          <option value="mongo" selected>MongoDB</option>
+          <option value="spreadsheet">시트</option>
+          <option value="json">JSON</option>
+        </select>
+      </span>
+      <span class="settings-item">
+        <label class="settings-label">탭</label>
+        <select id="searchTabSelect">
+          <option value="1">전체</option>
+          <option value="2">Shorts</option>
+          <option value="3" selected>동영상</option>
+        </select>
+      </span>
+      <span class="settings-item">
+        <label class="settings-label">크롤링 수</label>
+        <select id="crawlLimit">
+          <option value="50">50</option>
+          <option value="100" selected>100</option>
+          <option value="200">200</option>
+          <option value="max">max</option>
+        </select>
+      </span>
+      <span class="settings-item">
+        <label class="settings-label">제목 필터</label>
+        <select id="titleFilterSelect">
+          <option value="n" selected>아니오</option>
+          <option value="y">예</option>
+        </select>
+      </span>
+      <span class="settings-item">
+        <label class="settings-label">헤드리스</label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="headlessCheckbox" />
+          <span>백그라운드 실행 (창 숨김)</span>
+        </label>
+      </span>
+    </div>
+    <div class="settings-row settings-row-keyword">
+      <span class="settings-item settings-item-full">
+        <label class="settings-label">키워드</label>
+        <input type="text" id="keywordInput" class="input-keyword" placeholder="쉼표로 구분 시 여러 키워드, 빈값이면 시트에서 읽어옵니다" />
+      </span>
+      <button type="button" class="btn btn-primary btn-run-crawl" id="btnRunCrawl">크롤링 실행</button>
+    </div>
+  </div>
+
+  <!-- Add Channel Modal -->
+  <div class="modal-overlay" id="addChannelModal">
+    <div class="modal">
+      <h3>채널 추가</h3>
+      <div class="modal-row">
+        <label>채널명 *</label>
+        <input type="text" id="modalChannelName" placeholder="예: 잘사는김대리" />
+      </div>
+      <div class="modal-row">
+        <label>채널 별칭 *</label>
+        <input type="text" id="modalChannelAlias" placeholder="예: kimdaeri" />
+      </div>
+      <div class="modal-row">
+        <label>스프레드시트 ID (선택)</label>
+        <input type="text" id="modalSpreadsheetId" placeholder="URL의 /d/ 다음 부분" />
+      </div>
+      <div class="modal-error" id="modalError"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="modalCancel">취소</button>
+        <button type="button" class="btn btn-primary" id="modalConfirm">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="history-section hidden" id="historySection">
+    <h2 class="history-title">히스토리 (이전 크롤링 키워드)</h2>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <div class="filter-section hidden" id="filterSection">
+    <div class="filter-item">
+      <label><input type="checkbox" id="filterPickOnly" /> pick만 보기</label>
+      <span class="pick-count-badge" id="pickCountBadge">0</span>
+    </div>
+    <div class="filter-item">
+      <label><input type="checkbox" id="filterVpf100" /> VPF 100 이상만 보기</label>
+      <span class="pick-count-badge" id="vpf100CountBadge">0</span>
+    </div>
+    <div class="filter-item">
+      <label>조회수</label>
+      <input type="number" id="filterViewsMin" placeholder="이상" min="0" />
+      <span>이상만 보기</span>
+    </div>
+    <div class="filter-item">
+      <label>팔로워</label>
+      <input type="number" id="filterFollowersMin" placeholder="최소" min="0" />
+      <span>~</span>
+      <input type="number" id="filterFollowersMax" placeholder="최대" min="0" />
+    </div>
+  </div>
+
+  <div class="caption" id="caption"></div>
+  <div id="content">
+    <div class="loading" id="loading">채널을 선택한 뒤 히스토리에서 키워드를 선택하세요.</div>
+    <div class="error hidden" id="error"></div>
+    <div class="table-wrap hidden" id="tableWrap"></div>
+  </div>
+
+  <div class="thumb-popup" id="thumbPopup">
+    <img id="thumbPopupImg" src="" alt="" />
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

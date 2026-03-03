@@ -1,0 +1,15 @@
+1. 시트에 키워드를 입력 후 main.js가 실행됩니다.
+
+시트 :
+https://docs.google.com/spreadsheets/d/16ED7-pXXwVEmleh8yQvuJ_hn-TYkW4ZlUCNYeA5iSz0/edit
+
+
+명령어 : 
+main.js
+
+
+일렉트론 :
+npm run app
+
+개발모드
+npm run app:dev
