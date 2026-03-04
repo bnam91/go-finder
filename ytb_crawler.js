@@ -36,17 +36,24 @@ function getChromePath() {
   return null;
 }
 
-export async function main(keywords) {
+/**
+ * @param {string[]} keywords
+ * @param {{ skipSave?: boolean, label?: string }} opts - skipSave: true면 저장 생략하고 allResults 반환. label: 로그 접두사 (병렬 모드용)
+ */
+export async function main(keywords, opts = {}) {
+  const { skipSave = false, label = '' } = opts;
+  const prefix = label ? `[${label}] ` : '';
+
   if (!keywords || keywords.length === 0) {
     throw new Error('키워드가 없습니다.');
   }
 
   const crawlCount = config.crawlCount ?? 100;
-  console.log(`필터: ${config.filterByKeyword ? '제목에 키워드 포함만' : '검색결과 전체'}`);
+  console.log(`${prefix}필터: ${config.filterByKeyword ? '제목에 키워드 포함만' : '검색결과 전체'}`);
 
   const tabMap = { 1: '전체', 2: 'Shorts', 3: '동영상' };
   const tabLabel = tabMap[config.searchTab] || '동영상';
-  console.log(`선택된 탭: ${tabLabel} (searchTab=${config.searchTab})`);
+  console.log(`${prefix}선택된 탭: ${tabLabel} (searchTab=${config.searchTab})`);
 
   const chromePath = getChromePath();
   const launchOptions = {
@@ -57,25 +64,27 @@ export async function main(keywords) {
   
   if (chromePath) {
     launchOptions.executablePath = chromePath;
-    console.log(`시스템 Chrome 사용: ${chromePath}`);
+    if (!label) console.log(`시스템 Chrome 사용: ${chromePath}`);
   }
 
   const browser = await puppeteer.launch(launchOptions);
 
   const allResults = [];
 
-  if (isOutputEnabled('spreadsheet')) {
-    await clearChannelIdSheet();
-    await writeHeaderToSheet();
-  }
-  if (isOutputEnabled('json')) {
-    console.log(`크롤링 결과를 키워드별 JSON으로 저장합니다: ${getJsonOutputDir()}/`);
-  }
-  if (isOutputEnabled('mongo')) {
-    console.log('크롤링 결과를 MongoDB에 저장합니다.');
-  }
-  if (!isOutputEnabled('spreadsheet') && !isOutputEnabled('json') && !isOutputEnabled('mongo')) {
-    console.log('경고: output에서 spreadsheet, json, mongo가 모두 0입니다. 결과가 저장되지 않습니다.');
+  if (!skipSave) {
+    if (isOutputEnabled('spreadsheet')) {
+      await clearChannelIdSheet();
+      await writeHeaderToSheet();
+    }
+    if (isOutputEnabled('json')) {
+      console.log(`${prefix}크롤링 결과를 키워드별 JSON으로 저장합니다: ${getJsonOutputDir()}/`);
+    }
+    if (isOutputEnabled('mongo')) {
+      console.log(`${prefix}크롤링 결과를 MongoDB에 저장합니다.`);
+    }
+    if (!isOutputEnabled('spreadsheet') && !isOutputEnabled('json') && !isOutputEnabled('mongo')) {
+      console.log(`${prefix}경고: output에서 spreadsheet, json, mongo가 모두 0입니다. 결과가 저장되지 않습니다.`);
+    }
   }
   const page = await browser.newPage();
 
@@ -107,9 +116,9 @@ export async function main(keywords) {
       }, tabLabel);
       if (!clicked) throw new Error(`'${tabLabel}' 탭을 찾을 수 없음`);
       await new Promise((r) => setTimeout(r, config.crawl.tabWaitMs));
-      console.log(`${keyword}: '${tabLabel}' 탭으로 이동 완료`);
+      console.log(`${prefix}${keyword}: '${tabLabel}' 탭으로 이동 완료`);
     } catch (e) {
-      console.log(`${keyword}: 오류 발생 - ${e.message}`);
+      console.log(`${prefix}${keyword}: 오류 발생 - ${e.message}`);
       continue;
     }
 
@@ -133,7 +142,7 @@ export async function main(keywords) {
 
       totalProcessed += newData.length;
       const domCount = await getDomVideoCount(page);
-      console.log(`${keyword}: 현재 ${totalProcessed}개 크롤링 (DOM 비디오 ${domCount}개)`);
+      console.log(`${prefix}${keyword}: 현재 ${totalProcessed}개 크롤링 (DOM 비디오 ${domCount}개)`);
 
       if (totalProcessed === previousLength) {
         noNewDataCount += 1;
@@ -165,13 +174,17 @@ export async function main(keywords) {
     if (isOutputEnabled('spreadsheet')) dests.push('시트');
     if (isOutputEnabled('json') || isOutputEnabled('mongo')) dests.push('버퍼');
     const dest = dests.length ? dests.join(', ') + '에' : '저장 안 함';
-    console.log(`\n${keyword}: 총 ${totalProcessed}개의 Shorts 데이터를 크롤링하여 ${dest} 추가했습니다.`);
+    console.log(`\n${prefix}${keyword}: 총 ${totalProcessed}개의 Shorts 데이터를 크롤링하여 ${dest} 추가했습니다.`);
   }
 
   if (config.devMode !== 1) {
     await browser.close();
   } else {
-    console.log('\n[devMode] 크롬 창을 유지합니다. 수동으로 닫아주세요.');
+    console.log(`\n${prefix}[devMode] 크롬 창을 유지합니다. 수동으로 닫아주세요.`);
+  }
+
+  if (skipSave) {
+    return allResults;
   }
   await writeJsonResults(allResults);
 }

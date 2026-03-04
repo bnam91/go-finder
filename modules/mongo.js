@@ -9,6 +9,12 @@ const MONGO_CONFIG = {
     keywordsCollection: 'gotrap_keywords_kimdaeri',
     crawlDatesCollection: 'gotrap_crawl_dates',
   },
+  비빔면_더블루: {
+    db: '03_project_ytb_gotrap',
+    channel_alias: 'bibimmyeon_doubleblue',
+    keywordsCollection: 'gotrap_keywords_bibimmyeon_doubleblue',
+    crawlDatesCollection: 'gotrap_crawl_dates',
+  },
 };
 
 function getMongoCfg(spreadsheet) {

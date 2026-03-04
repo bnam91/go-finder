@@ -1,13 +1,14 @@
 /**
  * Electron 앱 없이 바로 크롤링 실행
- * 채널: 비빔면_더블루, 탭: Shorts, 크롤링수: max, 제목필터: 아니오, 저장: MongoDB
+ * 채널: 비빔면_더블루, 탭: Shorts, 크롤링수: 200, 제목필터: 아니오, 저장: MongoDB
  * followers API 미사용, 벌크 필터(한글/views>200/년 전 제외) 선택 적용
  *
  * 사용법:
  *   node crawl-standalone.js              # 채널 시트 A열에서 키워드 읽음
- *   node crawl-standalone.js a            # 키워드 시트 A열(인덱스0)에서 읽음
- *   node crawl-standalone.js 0             # 위와 동일 (0=A, 1=B, ...)
- *   node crawl-standalone.js b             # 키워드 시트 B열에서 읽음
+ *   node crawl-standalone.js a            # 키워드 시트 A열에서 읽음
+ *   node crawl-standalone.js b            # 키워드 시트 B열에서 읽음
+ *   node crawl-standalone.js a b          # A열+B열 병렬 크롤링
+ *   node crawl-standalone.js a b c        # A+B+C열 병렬 (3개 이상 가능)
  *   node crawl-standalone.js 키워드1,키워드2   # 키워드 직접 지정
  */
 import './loadEnv.js';
@@ -16,6 +17,8 @@ import { config } from './config.js';
 import { main as runCrawler } from './ytb_crawler.js';
 import { getKeywordsFromSheet, getKeywordsFromSpreadsheetByColumn } from './modules/sheets.js';
 import { getChannels } from './utils/channelConfig.js';
+import { closeMongoClient } from './modules/mongo.js';
+import { writeJsonResults } from './modules/output.js';
 
 function ask(question) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -29,7 +32,7 @@ function ask(question) {
 
 const CHANNEL_NAME = '비빔면_더블루';
 const SEARCH_TAB = 2; // Shorts
-const CRAWL_COUNT = Infinity; // max
+const CRAWL_COUNT = 100;
 const FILTER_BY_KEYWORD = false; // 아니오
 const OUTPUT_MONGO = 1;
 
@@ -58,8 +61,8 @@ function parseColumnArg(arg) {
   return null;
 }
 
-async function getKeywords() {
-  const arg = process.argv[2];
+/** 단일 열 또는 직접 지정 키워드 */
+async function getKeywords(arg) {
   const colLetter = parseColumnArg(arg);
   if (colLetter) {
     const keywords = await getKeywordsFromSpreadsheetByColumn(KEYWORD_SPREADSHEET_ID, colLetter, KEYWORD_SHEET_NAME);
@@ -75,8 +78,26 @@ async function getKeywords() {
   return await getKeywordsFromSheet();
 }
 
+/** 병렬 모드: argv[2]부터 열 문자가 2개 이상인지 확인. [{ arg, colLetter }, ...] */
+function getParallelColumns() {
+  const args = process.argv.slice(2);
+  const cols = [];
+  const seen = new Set();
+  for (const arg of args) {
+    const col = parseColumnArg(arg);
+    if (col && !seen.has(col)) {
+      seen.add(col);
+      cols.push({ arg, colLetter: col });
+    }
+  }
+  return cols.length >= 2 ? cols : null;
+}
+
 async function main() {
-  console.log(`\n--- 크롤링 실행 (채널: ${CHANNEL_NAME}, 탭: Shorts, 수: max, 제목필터: 아니오) ---\n`);
+  const parallelCols = getParallelColumns();
+  const isParallel = !!parallelCols;
+
+  console.log(`\n--- 크롤링 실행 (채널: ${CHANNEL_NAME}, 탭: Shorts, 수: ${CRAWL_COUNT}${isParallel ? ', 병렬: ' + parallelCols.map((c) => c.colLetter.toUpperCase() + '열').join('+') : ''}) ---\n`);
 
   const ch = await getChannelConfig();
 
@@ -99,17 +120,42 @@ async function main() {
   config.puppeteer.headless = process.env.HEADLESS === 'true';
   config.skipFollowersApi = true; // standalone에서는 followers API 미사용
 
-  const keywords = await getKeywords();
-  if (!keywords?.length) {
-    throw new Error('키워드가 없습니다. 인자로 전달하거나 스프레드시트에 등록해주세요.');
+  if (isParallel) {
+    const keywordsList = await Promise.all(parallelCols.map(({ arg }) => getKeywords(arg)));
+    const hasAny = keywordsList.some((kw) => kw?.length);
+    if (!hasAny) {
+      throw new Error('키워드가 없습니다. 지정한 열에 스프레드시트에 등록해주세요.');
+    }
+    parallelCols.forEach(({ colLetter }, i) => {
+      const kw = keywordsList[i];
+      console.log(`[${colLetter.toUpperCase()}열] 키워드: ${kw?.length ? kw.join(', ') : '(없음)'}`);
+    });
+    console.log(`벌크필터: ${config.applyBulkFilter ? '적용' : '미적용'}\n`);
+
+    const results = await Promise.all(
+      keywordsList.map((keywords, i) =>
+        keywords?.length
+          ? runCrawler(keywords, { skipSave: true, label: `${parallelCols[i].colLetter.toUpperCase()}열` })
+          : Promise.resolve([])
+      )
+    );
+    const merged = results.flat();
+    if (merged.length > 0) {
+      await writeJsonResults(merged);
+    }
+    console.log(`\n병렬 크롤링 완료. 총 ${merged.length}건 저장.`);
+  } else {
+    const keywords = await getKeywords(process.argv[2]);
+    if (!keywords?.length) {
+      throw new Error('키워드가 없습니다. 인자로 전달하거나 스프레드시트에 등록해주세요.');
+    }
+    console.log(`키워드: ${keywords.join(', ')}`);
+    console.log(`벌크필터: ${config.applyBulkFilter ? '적용' : '미적용'}\n`);
+
+    await runCrawler(keywords);
   }
 
-  console.log(`키워드: ${keywords.join(', ')}`);
-  console.log(`벌크필터: ${config.applyBulkFilter ? '적용' : '미적용'}\n`);
-
-  await runCrawler(keywords);
-  // followers API 호출 생략
-
+  await closeMongoClient(); // 쓰기 플러시 후 연결 종료 (프로세스 조기 종료 방지)
   console.log('\n크롤링 완료.');
 }
 
