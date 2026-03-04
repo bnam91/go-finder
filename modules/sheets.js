@@ -66,6 +66,27 @@ export function getKeywordsFromSheet() {
   });
 }
 
+/**
+ * 지정한 스프레드시트의 특정 열에서 키워드 읽기 (칼럼별 키워드 그룹용)
+ * @param {string} spreadsheetId - 스프레드시트 ID
+ * @param {string} columnLetter - 열 문자 (a, b, c, ... A=인덱스0)
+ * @param {string} [sheetName='Sheet1'] - 시트 이름
+ * @returns {Promise<string[]>}
+ */
+export async function getKeywordsFromSpreadsheetByColumn(spreadsheetId, columnLetter, sheetName = 'Sheet1') {
+  const col = String(columnLetter).trim().toUpperCase();
+  if (!col || col.length !== 1 || col < 'A' || col > 'Z') {
+    throw new Error(`유효한 열 문자(a-z)를 입력하세요. 입력: ${columnLetter}`);
+  }
+  const auth = await getCredentials();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const range = `${sheetName}!${col}:${col}`;
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+  const values = res.data.values || [];
+  const keywords = values.filter((row) => row && row[0]).map((row) => String(row[0]).trim()).filter(Boolean);
+  return keywords;
+}
+
 export function clearChannelIdSheet() {
   return getCredentials().then(async (auth) => {
     const sheets = google.sheets({ version: 'v4', auth });

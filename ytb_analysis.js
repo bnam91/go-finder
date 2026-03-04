@@ -125,6 +125,9 @@ export async function main(channelId) {
 
   // 인자 없음 → JSON 또는 시트에 구독자 수·VPF 추가
   try {
+    if (config.skipFollowersApi) {
+      return; // followers API 호출 생략 (standalone 크롤링 등)
+    }
     if (!process.env.YOUTUBE_API_KEY && (isOutputEnabled('json') || isOutputEnabled('mongo') || isOutputEnabled('spreadsheet'))) {
       console.warn('[구독자 수] YOUTUBE_API_KEY가 설정되지 않았습니다. .env에 추가하면 followers를 채울 수 있습니다.');
     }

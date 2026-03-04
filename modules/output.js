@@ -3,6 +3,7 @@ import fs from 'fs';
 import { config } from '../config.js';
 import { appendBatchToSheet } from './sheets.js';
 import { validateBatch } from './validate.js';
+import { filterBatch } from './bulkFilter.js';
 import { saveKeywordsToMongo, saveCrawlDatesToMongo, getChannelAlias, isMongoSupported } from './mongo.js';
 
 /** config.output 리스트에서 해당 방식이 1인지 확인 */
@@ -23,12 +24,24 @@ export async function saveBatch(dataBatch, allResults) {
     console.log(`[검수] ${invalid.length}건 누락 → 재시도 대상 (예: ${missingSummary}${invalid.length > 3 ? ' ...' : ''})`);
   }
   if (valid.length === 0) return;
+
+  let toSave = valid;
+  if (config.applyBulkFilter) {
+    const { passed, excluded, reasonCounts } = filterBatch(valid);
+    toSave = passed;
+    if (excluded.length > 0) {
+      const reasonStr = [...reasonCounts.entries()].map(([r, c]) => `${r}: ${c}건`).join(', ');
+      console.log(`[벌크필터] ${excluded.length}건 제외 (${reasonStr})`);
+    }
+  }
+
+  if (toSave.length === 0) return;
   if (isOutputEnabled('json') || isOutputEnabled('mongo')) {
-    allResults.push(...valid);
-    console.log(`${valid.length}개의 결과를 버퍼에 추가했습니다. (총 ${allResults.length}건)`);
+    allResults.push(...toSave);
+    console.log(`${toSave.length}개의 결과를 버퍼에 추가했습니다. (총 ${allResults.length}건)`);
   }
   if (isOutputEnabled('spreadsheet')) {
-    await appendBatchToSheet(valid);
+    await appendBatchToSheet(toSave);
   }
 }
 

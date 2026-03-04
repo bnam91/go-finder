@@ -61,6 +61,12 @@ export const config = {
   /** 제목에 키워드 포함된 비디오만 수집 */
   filterByKeyword: process.env.FILTER_BY_KEYWORD === '1' || process.env.FILTER_BY_KEYWORD === 'y',
 
+  /** 벌크 필터 적용: 한글 제목만, views>200, upload_date에 '년 전' 제외 */
+  applyBulkFilter: process.env.APPLY_BULK_FILTER === '1' || process.env.APPLY_BULK_FILTER === 'y',
+
+  /** 구독자 수 API 호출 생략 (standalone 크롤링 시 사용) */
+  skipFollowersApi: process.env.SKIP_FOLLOWERS_API === '1' || process.env.SKIP_FOLLOWERS_API === 'y',
+
   /** 크롤링 동작 */
   crawl: {
     /** 스크롤 후 대기 시간(ms) - 너무 짧으면 새 콘텐츠 로드 전에 크롤링해 누락 발생 */

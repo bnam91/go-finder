@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node main.js",
     "crawl": "node main.js",
+    "crawl:standalone": "node crawl-standalone.js",
     "app": "electron .",
     "app:dev": "ELECTRON_DEV=1 electron .",
     "indicator": "node scripts/indicator.js",
