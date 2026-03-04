@@ -35,7 +35,7 @@ const OUTPUT_MONGO = 1;
 
 /** 칼럼별 키워드 그룹 시트 (환경변수 STANDALONE_KEYWORD_SPREADSHEET_ID로 변경 가능) */
 const KEYWORD_SPREADSHEET_ID = process.env.STANDALONE_KEYWORD_SPREADSHEET_ID || '1cSYDxR_QwgWM7qeJwQSZBfB7ZQ9mSBkberjYZKinys0';
-const KEYWORD_SHEET_NAME = process.env.STANDALONE_KEYWORD_SHEET || 'Sheet1';
+const KEYWORD_SHEET_NAME = process.env.STANDALONE_KEYWORD_SHEET || 'keywords';
 
 async function getChannelConfig() {
   const channels = await getChannels();

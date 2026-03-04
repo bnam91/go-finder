@@ -57,12 +57,13 @@ export function getKeywordsFromSheet() {
       range: `${config.sheets.keyword}!A:A`,
     });
     const values = res.data.values || [];
+    const dataRows = values.length > 1 ? values.slice(1) : []; // 첫 행은 헤더
 
-    if (values.length === 0) {
+    if (dataRows.length === 0) {
       console.log(`스프레드시트('${alias}')에서 키워드를 찾을 수 없습니다.`);
       return [];
     }
-    return values.filter((row) => row && row[0]).map((row) => row[0]);
+    return dataRows.filter((row) => row && row[0]).map((row) => row[0]);
   });
 }
 
@@ -83,7 +84,8 @@ export async function getKeywordsFromSpreadsheetByColumn(spreadsheetId, columnLe
   const range = `${sheetName}!${col}:${col}`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
   const values = res.data.values || [];
-  const keywords = values.filter((row) => row && row[0]).map((row) => String(row[0]).trim()).filter(Boolean);
+  const dataRows = values.length > 1 ? values.slice(1) : []; // 첫 행은 헤더
+  const keywords = dataRows.filter((row) => row && row[0]).map((row) => String(row[0]).trim()).filter(Boolean);
   return keywords;
 }
 

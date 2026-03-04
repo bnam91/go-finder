@@ -3,6 +3,38 @@ import { config } from './config.js';
 import { clearChannelIdSheet, writeHeaderToSheet } from './modules/sheets.js';
 import { scrollPage, crawlDataStream, waitForDomStable, getDomVideoCount } from './modules/crawler.js';
 import { isOutputEnabled, saveBatch, writeJsonResults, getJsonOutputDir } from './modules/output.js';
+import { existsSync } from 'fs';
+
+function getChromePath() {
+  // macOS에서 시스템 Chrome 경로 확인
+  const macChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  if (existsSync(macChromePath)) {
+    return macChromePath;
+  }
+  // Linux에서 Chrome 경로 확인
+  const linuxChromePaths = [
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ];
+  for (const path of linuxChromePaths) {
+    if (existsSync(path)) {
+      return path;
+    }
+  }
+  // Windows에서 Chrome 경로 확인
+  const winChromePaths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ];
+  for (const path of winChromePaths) {
+    if (existsSync(path)) {
+      return path;
+    }
+  }
+  return null;
+}
 
 export async function main(keywords) {
   if (!keywords || keywords.length === 0) {
@@ -16,11 +48,19 @@ export async function main(keywords) {
   const tabLabel = tabMap[config.searchTab] || '동영상';
   console.log(`선택된 탭: ${tabLabel} (searchTab=${config.searchTab})`);
 
-  const browser = await puppeteer.launch({
+  const chromePath = getChromePath();
+  const launchOptions = {
     headless: config.puppeteer.headless,
     args: config.puppeteer.args,
     defaultViewport: null,
-  });
+  };
+  
+  if (chromePath) {
+    launchOptions.executablePath = chromePath;
+    console.log(`시스템 Chrome 사용: ${chromePath}`);
+  }
+
+  const browser = await puppeteer.launch(launchOptions);
 
   const allResults = [];
 
