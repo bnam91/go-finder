@@ -1,0 +1,9 @@
+이어서 진행
+npm run channel-analysis mongo from_mongo
+
+전체 최신화 / 덮어쓰기
+npm run channel-analysis mongo from_mongo refresh
+
+
+**스레드 5개**
+npm run channel-analysis mongo from_mongo workers=5

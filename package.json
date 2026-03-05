@@ -11,7 +11,15 @@
     "app": "electron .",
     "app:dev": "ELECTRON_DEV=1 electron .",
     "indicator": "node scripts/indicator.js",
-    "subscriptions": "node scripts/subscriptions.js"
+    "subscriptions": "node scripts/subscriptions.js",
+    "channel-analysis": "node channel-analysis/youtube-channel-scraper.js",
+    "channel-analysis:dev": "node channel-analysis/youtube-channel-scraper.js dev",
+    "channel-analysis:mongo": "node channel-analysis/youtube-channel-scraper.js mongo",
+    "channel-analysis:sheet": "node channel-analysis/youtube-channel-scraper.js sheet",
+    "channel-analysis:all": "node channel-analysis/youtube-channel-scraper.js all",
+    "channel-analysis:from-mongo": "node channel-analysis/youtube-channel-scraper.js from_mongo",
+    "channel-analysis:refresh": "node channel-analysis/youtube-channel-scraper.js from_mongo refresh",
+    "channel-analysis:workers": "node channel-analysis/youtube-channel-scraper.js mongo from_mongo workers=5"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

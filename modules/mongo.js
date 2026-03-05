@@ -232,6 +232,136 @@ export async function replaceKeywordsInMongo(itemsByKeyword, spreadsheet) {
   }
 }
 
+const GOTRAP_KEYWORD_PREFIX = 'gotrap_keywords_';
+const GOTRAP_OUTPUT_PREFIX = 'gotrap_output_';
+const GOTRAP_DB = '03_project_ytb_gotrap';
+const GOTRAP_OUTPUT_COLL_DEFAULT = 'gotrap_output_';
+
+/** gotrap_keywords_X → gotrap_output_X */
+export function getOutputCollectionFromSource(sourceCollection) {
+  if (!sourceCollection) return GOTRAP_OUTPUT_COLL_DEFAULT;
+  if (sourceCollection.startsWith(GOTRAP_KEYWORD_PREFIX)) {
+    const suffix = sourceCollection.slice(GOTRAP_KEYWORD_PREFIX.length);
+    return `${GOTRAP_OUTPUT_PREFIX}${suffix}`;
+  }
+  return GOTRAP_OUTPUT_COLL_DEFAULT;
+}
+
+/** gotrap_keywords_ 접두어 컬렉션 목록 (번호 붙여 반환) */
+export async function listGotrapKeywordCollections() {
+  const c = await getClient();
+  const db = c.db(GOTRAP_DB);
+  const collections = await db.listCollections().toArray();
+  const keywordColls = collections
+    .map((c) => c.name)
+    .filter((name) => name.startsWith(GOTRAP_KEYWORD_PREFIX))
+    .sort();
+  return keywordColls;
+}
+
+/** gotrap_keywords_* 컬렉션에서 distinct channel_id 조회 */
+export async function getChannelIdsFromKeywordsCollection(collectionName) {
+  const c = await getClient();
+  const db = c.db(GOTRAP_DB);
+  const coll = db.collection(collectionName);
+  const ids = await coll.distinct('channel_id');
+  return ids.filter((id) => id && String(id).trim()).map((id) => String(id).trim());
+}
+
+/** gotrap_output_* 에 완료된 channelId 목록 (status='완료' 또는 status 없음=구버전) */
+export async function getAnalyzedChannelIds(outputCollection = GOTRAP_OUTPUT_COLL_DEFAULT) {
+  const c = await getClient();
+  const db = c.db(GOTRAP_DB);
+  const coll = db.collection(outputCollection);
+  const ids = await coll.distinct('channelId', {
+    $or: [{ status: '완료' }, { status: { $exists: false } }],
+  });
+  return new Set(ids.filter((id) => id));
+}
+
+/** 큐 시드: 처리할 채널들을 status='대기중'으로 upsert */
+export async function seedChannelQueue(outputCollection, channelIds) {
+  if (!channelIds?.length) return 0;
+  const c = await getClient();
+  const db = c.db(GOTRAP_DB);
+  const coll = db.collection(outputCollection);
+  const ops = channelIds.map((channelId) => ({
+    updateOne: {
+      filter: { channelId },
+      update: { $set: { channelId, status: '대기중', updatedAt: new Date() } },
+      upsert: true,
+    },
+  }));
+  const r = await coll.bulkWrite(ops);
+  return r.upsertedCount + r.modifiedCount;
+}
+
+/** 대기중 → 작업중 원자적 클레임. workerId로 어떤 워커가 처리 중인지 표시 */
+export async function claimChannel(outputCollection, workerId) {
+  const c = await getClient();
+  const db = c.db(GOTRAP_DB);
+  const coll = db.collection(outputCollection);
+  const doc = await coll.findOneAndUpdate(
+    { status: '대기중' },
+    { $set: { status: '작업중', workerId, startedAt: new Date(), updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  return doc;
+}
+
+/** 작업 완료: 채널 데이터 저장 + status='완료' */
+export async function completeChannel(outputCollection, channelId, fullDoc, sourceCollection = null) {
+  const c = await getClient();
+  const db = c.db(GOTRAP_DB);
+  const coll = db.collection(outputCollection);
+  const toSave = {
+    ...fullDoc,
+    status: '완료',
+    completedAt: new Date(),
+    updatedAt: new Date(),
+    sourceCollection: sourceCollection || undefined,
+  };
+  await coll.updateOne(
+    { channelId },
+    { $set: toSave, $unset: { workerId: '', startedAt: '' } }
+  );
+}
+
+/** 작업 실패: 작업중 → 대기중으로 되돌려 재시도 가능하게 */
+export async function releaseChannel(outputCollection, channelId) {
+  const c = await getClient();
+  const db = c.db(GOTRAP_DB);
+  const coll = db.collection(outputCollection);
+  await coll.updateOne(
+    { channelId },
+    { $set: { status: '대기중', updatedAt: new Date() }, $unset: { workerId: '', startedAt: '' } }
+  );
+}
+
+/** 채널 분석 결과를 gotrap_output_* 컬렉션에 저장. opts.upsert=true면 기존 문서 덮어쓰기(최신화) */
+export async function saveChannelAnalysisToMongo(doc, sourceCollection = null, opts = {}) {
+  if (!doc || !doc.channelId) return;
+  try {
+    const outputColl = getOutputCollectionFromSource(sourceCollection);
+    const c = await getClient();
+    const db = c.db(GOTRAP_DB);
+    const coll = db.collection(outputColl);
+    const toSave = { ...doc, status: '완료', updatedAt: new Date() };
+    if (sourceCollection) toSave.sourceCollection = sourceCollection;
+    if (!toSave.createdAt) toSave.createdAt = toSave.updatedAt;
+
+    if (opts.upsert) {
+      await coll.updateOne({ channelId: doc.channelId }, { $set: toSave }, { upsert: true });
+      console.log(`MongoDB 업데이트: ${outputColl} ← ${doc.channelId}`);
+    } else {
+      await coll.insertOne(toSave);
+      console.log(`MongoDB 저장: ${outputColl} ← ${doc.channelId}`);
+    }
+  } catch (e) {
+    console.error('MongoDB 채널분석 저장 오류:', e.message);
+  }
+}
+
 /** 연결 종료 */
 export async function closeMongoClient() {
   if (client) {
